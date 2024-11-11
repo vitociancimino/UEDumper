@@ -217,7 +217,9 @@
     <ClInclude Include="Frontend\Windows\PackageViewerWindow.h" />
     <ClInclude Include="Frontend\Windows\PackageWindow.h" />
     <ClInclude Include="Frontend\Windows\TopRowButtons.h" />
+    <ClInclude Include="Memory\contenitoreMioDriver.h" />
     <ClInclude Include="Memory\driver.h" />
+    <ClInclude Include="Memory\HandleMioDriver.h" />
     <ClInclude Include="Memory\Memory.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Resources\AES\AES.h" />

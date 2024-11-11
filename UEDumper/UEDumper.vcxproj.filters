@@ -290,6 +290,12 @@
     <ClInclude Include="Engine\Userdefined\FeatureFlags.h">
       <Filter>Engine\User Defined</Filter>
     </ClInclude>
+    <ClInclude Include="Memory\contenitoreMioDriver.h">
+      <Filter>Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="Memory\HandleMioDriver.h">
+      <Filter>Memory</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="UEDumper.rc">
