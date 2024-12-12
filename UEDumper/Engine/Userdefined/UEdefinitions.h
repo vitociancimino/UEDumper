@@ -63,10 +63,17 @@
 #define UE_5_03		12
 
 
+
 /* UE version settings */
 
 //set your games ue version
-#define UE_VERSION UE_4_19
+#define DFHO
+
+#if defined (DFHO)
+#define UE_VERSION UE_4_24
+#else
+#define UE_VERSION UE_4_27
+#endif
 
 
 /* SDK and MDK generation */
@@ -78,7 +85,11 @@
 
 
 //in case the FNames are encrypted, it will use your decryption function in FName_decryption.h
+#if defined (DFHO)
+#define USE_FNAME_ENCRYPTION TRUE
+#else
 #define USE_FNAME_ENCRYPTION FALSE
+#endif
 
 //set this to TRUE if your game uses WITH_CASE_PRESERVING_NAME (WITH_EDITORONLY_DATA)
 //if GNames fail, try setting this to true

@@ -80,6 +80,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>Frontend/ImGui/;Resources/AES/;Resources/Json/;Resources/Dumpspace/;../UEDumper/;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <OutDir>C:\Users\salvo\Documents\Cartella condivisa PC</OutDir>
+    <TargetName>mumma</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

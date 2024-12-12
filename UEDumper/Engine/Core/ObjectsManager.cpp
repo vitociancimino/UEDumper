@@ -74,7 +74,8 @@ ObjectsManager::ObjectsManager()
 #endif
 
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_INFO, "OBJECTSMANAGER", "TUObject -> 0x%p", gUObjectManager.UObjectArray.Objects);
-	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_INFO, "OBJECTSMANAGER", "TUObject elements: %d", gUObjectManager.UObjectArray.NumElements);
+	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_INFO, "OBJECTSMANAGER", "TUObject NumElements: %d", gUObjectManager.UObjectArray.NumElements);
+	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_INFO, "OBJECTSMANAGER", "TUObject NumChunks: %d", gUObjectManager.UObjectArray.NumChunks);
 
 	if (!gUObjectManager.UObjectArray.Objects)
 	{

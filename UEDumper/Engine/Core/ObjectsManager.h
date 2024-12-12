@@ -66,6 +66,21 @@ public:
 	//however the NumElementsPerChunk changed from 65 * 1024 to 64 * 1024 for >= 4.21
 	//https://github.com/EpicGames/UnrealEngine/blob/4.21/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectArray.h#L321
 	//-> https://github.com/EpicGames/UnrealEngine/blob/4.21/Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectArray.h#L960
+
+#if defined(DFHO)
+	struct FChunkedFixedUObjectArray
+	{
+		int32_t MaxChunks;
+		int32_t NumElements;
+		int32_t NumChunks;
+		char Pad[4];
+		FUObjectItem** Objects;
+		char Pad2[0x16];
+		int32_t MaxElements;
+		FUObjectItem* PreAllocatedObjects;
+	};
+#else
+
 	struct FChunkedFixedUObjectArray
 	{
 		/** Master table to chunks of pointers **/
@@ -81,6 +96,8 @@ public:
 		/** Number of chunks we currently have **/
 		int32_t NumChunks;
 	};
+
+#endif
 
 	typedef FChunkedFixedUObjectArray TypeUObjectArray;
 #endif
@@ -163,7 +180,7 @@ private:
 	*/
 	static void verifyUBigObjectSize(UObjectManager::UBigObject* bigObjectPtr, int requiredSize);
 
-	
+
 
 	/**
 	 * \brief USE ONLY AFTER UBIGOBJECT GENERATION! ONLY USE FOR UOBJECTS! ONLY USE FOR SDK!!
@@ -171,7 +188,7 @@ private:
 	 * \return Game pointer
 	 */
 	static uint64_t getUObjectPtrByIndex(int index);
-	
+
 
 	//The ObjectsMNanager can call this function to terminate its current job. The program either needs to terminate or fallback
 	static void STOP_OPERATION();
@@ -182,7 +199,7 @@ private:
 
 public:
 
-	
+
 
 	//basic constructor and default initializer
 	ObjectsManager();
@@ -197,7 +214,7 @@ public:
 	 * \brief Only call this function if you are able to recover from a critical stop!
 	 */
 	static void resolvedStop();
-	
+
 	static std::string getErrorMessage();
 
 
@@ -303,7 +320,7 @@ public:
 			}
 			//invalid state
 			return nullptr;
-				
+
 		}
 		UObjectManager::UBigObject* bigObject = gUObjectManager.linkedUObjectPtrs[gamePtr];
 		verifyUBigObjectSize(bigObject, sizeof(T));

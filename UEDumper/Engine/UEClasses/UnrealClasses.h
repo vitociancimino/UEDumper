@@ -26,23 +26,27 @@ class UClass;
 class UObject
 {
 public:
-	//we never needed the vtable so why not make it the object ptr /shrug?
+
+#if defined(DFHO)
+
+	uint64_t                                           objectptr = 0;                                                     // 0x0000   (0x0008)  
+	unsigned char                                      UnknownData00_6[0x8];                                       // 0x0008   (0x0008)  MISSED
+	class UClass* ClassPrivate;                                               // 0x0010   (0x0008)  
+	class UObject* OuterPrivate;                                               // 0x0018   (0x0008)  
+	EObjectFlags                                       ObjectFlags;                                                // 0x0020   (0x0004)  
+	FName                                              NamePrivate;                                                // 0x0024   (0x0008)  
+	int32_t                                            InternalIndex;
+
+#else
 	uint64_t			objectptr = 0;
-
-	/** Flags used to track and report various object states. This needs to be 8 byte aligned on 32-bit platforms to reduce memory waste */
 	EObjectFlags		ObjectFlags = RF_NoFlags;
-
-	/** Index into GObjectArray...very private. */
 	int32_t				InternalIndex = 0;
-
-	/** Class the object belongs to. */
 	class UClass* ClassPrivate = nullptr;
-
-	/** Name of this object */
 	FName				NamePrivate = FName();
+	class UObject* OuterPrivate = nullptr;
+#endif
 
 	/** Object this object resides in. */
-	class UObject* OuterPrivate = nullptr;
 
 	static std::string typeName() { return "UObject"; }
 

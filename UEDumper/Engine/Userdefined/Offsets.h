@@ -108,9 +108,21 @@ inline std::vector<Offset> setOffsets()
 	std::vector<Offset> offsets;
 
 	//brt
-	offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GNAMES", 0x2AD75C8 });
-	offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GOBJECTS", 0x2AD9F30 });
-	offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS | OFFSET_LIVE_EDITOR, "OFFSET_GWORLD", 0x2AF0FB8 });
+	//offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GNAMES", 0x2AD75C8 });
+	//offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GOBJECTS", 0x2AD9F30 });
+	//offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS | OFFSET_LIVE_EDITOR, "OFFSET_GWORLD", 0x2AF0FB8 });
+
+	//tom
+	//offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GNAMES", 0x57C7380 });
+	//offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GOBJECTS", 0x58036E0 });
+	//offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS | OFFSET_LIVE_EDITOR, "OFFSET_GWORLD", 0x56E9840 });
+	
+	////delta force
+	offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GNAMES", 0x101065C0 - 0x8 });
+	offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS, "OFFSET_GOBJECTS", 0x1011F910 - 0x10 });
+	offsets.push_back({ OFFSET_ADDRESS | OFFSET_DS | OFFSET_LIVE_EDITOR, "OFFSET_GWORLD", 0x0F8A24E8 });
+
+
 
 	return offsets;
 }

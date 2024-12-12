@@ -24,6 +24,24 @@
 //use the Memory::read function for reading any memory.
 static void fname_decrypt(char* inputBuf, int namelength)
 {
+	unsigned int v6 = 0; // er9
+	__int64 v7 = 0; // rdx
+	int a3 = namelength;
+
+	if (a3)
+	{
+		do
+		{
+			if (v6 >= 0x400)
+				break;
+			++v6;
+
+			*((BYTE*)inputBuf + v7) ^= 0x8bu;
+
+			v7 = v7 + 1;
+		} while (v6 < a3);
+	}
+
 	/// Example:
 	///	char* v2 = inputBuf; // rdi
 	///	int v4 = namelength; // ebx

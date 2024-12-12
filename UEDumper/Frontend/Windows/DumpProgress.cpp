@@ -33,6 +33,7 @@ bool windows::DumpProgress::render()
 	//async job that gets called once
 	if(!callOnce)
 	{
+		// salvatore
 		callOnce = true;
 		//unique pointer using future so the render function can return without waiting for the async thread to complete
 		std::make_unique<std::future<void>*>(new auto(std::async(std::launch::async, [] {
