@@ -31,11 +31,11 @@ public:
 
 	uint64_t                                           objectptr = 0;                                                     // 0x0000   (0x0008)  
 	unsigned char                                      UnknownData00_6[0x8];                                       // 0x0008   (0x0008)  MISSED
-	class UClass* ClassPrivate;                                               // 0x0010   (0x0008)  
-	class UObject* OuterPrivate;                                               // 0x0018   (0x0008)  
-	EObjectFlags                                       ObjectFlags;                                                // 0x0020   (0x0004)  
-	FName                                              NamePrivate;                                                // 0x0024   (0x0008)  
-	int32_t                                            InternalIndex;
+	class UClass* ClassPrivate = nullptr;                                              // 0x0010   (0x0008)  
+	class UObject* OuterPrivate = nullptr;                                      // 0x0018   (0x0008)  
+	EObjectFlags                                       ObjectFlags = RF_NoFlags;                                                // 0x0020   (0x0004)  
+	FName                                              NamePrivate = FName();                                               // 0x0024   (0x0008)  
+	int32_t                                            InternalIndex = 0;
 
 #else
 	uint64_t			objectptr = 0;

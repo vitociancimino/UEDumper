@@ -121,9 +121,13 @@ std::string EngineCore::FNameToString(FName fname)
 	char name[NAME_SIZE + 1] = { 0 };
 
 	//>4.23 name chunks exist
+#if defined(DFHO)
+	const unsigned int chunkOffset = fname.ComparisonIndex >> 18; //HIWORD
+	const unsigned short nameOffset = fname.ComparisonIndex & 0x3FFFF; //unsigned __int16
+#else
 	const unsigned int chunkOffset = fname.ComparisonIndex >> 16; //HIWORD
 	const unsigned short nameOffset = fname.ComparisonIndex; //unsigned __int16
-
+#endif
 
 	//average function since 4.25
 	//https://github.com/EpicGames/UnrealEngine/blob/5.1/Engine/Source/Runtime/Core/Private/UObject/UnrealNames.cpp#L3375
@@ -142,13 +146,13 @@ std::string EngineCore::FNameToString(FName fname)
 	}
 
 	Memory::read(
-		reinterpret_cast<void*>(namePoolChunk + 6), 
-		name, 
+		reinterpret_cast<void*>(namePoolChunk + 6),
+		name,
 		// safeguard against overflow and memory corruption
 		nameLength < NAME_SIZE ? nameLength : NAME_SIZE
 	);
 #else
-	int64_t namePoolChunk = Memory::read<uint64_t>(gNames + 8 * (chunkOffset + 2)) + 2 * nameOffset;
+	int64_t namePoolChunk = Memory::read<uint64_t>(gNames + 8 * (chunkOffset + 2)) + (2 * nameOffset);
 
 	const auto nameLength = Memory::read<uint16_t>(namePoolChunk) >> 6;
 
@@ -172,9 +176,11 @@ std::string EngineCore::FNameToString(FName fname)
 
 #if USE_FNAME_ENCRYPTION
 	//decrypt the FNames buffer
-	fname_decrypt(name, nameLength);
+	//if (fname.ComparisonIndex > 65463 && fname.ComparisonIndex < 263265)
+	//	fname_decrypt2(name, nameLength);
+	//else
+		fname_decrypt(name, nameLength);
 #endif
-
 
 	std::string finalName = std::string(name);
 
@@ -476,56 +482,56 @@ bool EngineCore::generateFunctions(const UStruct* object, std::vector<EngineStru
 	//this made me so mad i couldnt care less the code misses now a indent
 
 	//in every version we have to go through the children to
-for (auto fieldChild = object->getChildren(); fieldChild; fieldChild = fieldChild->getNext())
-{
-	if (ObjectsManager::CRITICAL_STOP_CALLED())
-		return false;
+	for (auto fieldChild = object->getChildren(); fieldChild; fieldChild = fieldChild->getNext())
+	{
+		if (ObjectsManager::CRITICAL_STOP_CALLED())
+			return false;
 
-	if (!fieldChild || !fieldChild->IsA<UFunction>())
-		continue;
+		if (!fieldChild || !fieldChild->IsA<UFunction>())
+			continue;
 
 
-	const auto fn = fieldChild->castTo<UFunction>();
+		const auto fn = fieldChild->castTo<UFunction>();
 
-	EngineStructs::Function eFunction;
-	eFunction.fullName = fn->getFullName();
-	eFunction.cppName = fn->getName();
-	eFunction.memoryAddress = fn->objectptr;
-	eFunction.functionFlags = fn->getFunctionFlagsString();
-	eFunction.binaryOffset = fn->Func - Memory::getBaseAddress();
+		EngineStructs::Function eFunction;
+		eFunction.fullName = fn->getFullName();
+		eFunction.cppName = fn->getName();
+		eFunction.memoryAddress = fn->objectptr;
+		eFunction.functionFlags = fn->getFunctionFlagsString();
+		eFunction.binaryOffset = fn->Func - Memory::getBaseAddress();
 
 #if UE_VERSION < UE_4_25
 
-	//ue < 4.25 uses the children but we have to cast them to a UProperty to use the flags
-	for (auto child = fn->getChildren(); child; child = child->getNext())
-	{
-		const auto propChild = child->castTo<UProperty>();
+		//ue < 4.25 uses the children but we have to cast them to a UProperty to use the flags
+		for (auto child = fn->getChildren(); child; child = child->getNext())
+		{
+			const auto propChild = child->castTo<UProperty>();
 #else
 
-	//ue >= 4.25 we go through the childproperties and we dont have to cast as they are already FProperties
-	for (auto child = fn->getChildProperties(); child; child = child->getNext())
-	{
-		const auto propChild = child;
+		//ue >= 4.25 we go through the childproperties and we dont have to cast as they are already FProperties
+		for (auto child = fn->getChildProperties(); child; child = child->getNext())
+		{
+			const auto propChild = child;
 
 #endif
 
-		//rest of the code is identical, nothing changed here
-		const auto propertyFlags = propChild->PropertyFlags;
+			//rest of the code is identical, nothing changed here
+			const auto propertyFlags = propChild->PropertyFlags;
 
-		if (propertyFlags & EPropertyFlags::CPF_ReturnParm && !eFunction.returnType)
-			eFunction.returnType = propChild->getType();
-		else if (propertyFlags & EPropertyFlags::CPF_Parm)
-		{
-			eFunction.params.push_back(std::tuple(propChild->getType(), propChild->getName(), propertyFlags, propChild->ArrayDim));
+			if (propertyFlags & EPropertyFlags::CPF_ReturnParm && !eFunction.returnType)
+				eFunction.returnType = propChild->getType();
+			else if (propertyFlags & EPropertyFlags::CPF_Parm)
+			{
+				eFunction.params.push_back(std::tuple(propChild->getType(), propChild->getName(), propertyFlags, propChild->ArrayDim));
+			}
 		}
+
+		// no defined return type => void
+		if (!eFunction.returnType)
+			eFunction.returnType = { false, PropertyType::StructProperty, "void" };
+
+		data.push_back(eFunction);
 	}
-
-	// no defined return type => void
-	if (!eFunction.returnType)
-		eFunction.returnType = { false, PropertyType::StructProperty, "void" };
-
-	data.push_back(eFunction);
-}
 	return true;
 }
 
@@ -627,102 +633,102 @@ void EngineCore::cookMemberArray(EngineStructs::Struct & eStruct)
 
 
 	auto checkRealMemberSize = [&](EngineStructs::Member* currentMember)
-	{
-		//set the real size
-		if (!currentMember->type.isPointer())
 		{
-			if (const auto classObject = getInfoOfObject(currentMember->type.name))
+			//set the real size
+			if (!currentMember->type.isPointer())
 			{
-				if (classObject->type == ObjectInfo::OI_Struct || classObject->type == ObjectInfo::OI_Class)
+				if (const auto classObject = getInfoOfObject(currentMember->type.name))
 				{
-					const auto cclass = static_cast<EngineStructs::Struct*>(classObject->target);
-					if(!cclass->noFixedSize)
-						currentMember->size = cclass->maxSize * (currentMember->arrayDim <= 0 ? 1 : currentMember->arrayDim);
+					if (classObject->type == ObjectInfo::OI_Struct || classObject->type == ObjectInfo::OI_Class)
+					{
+						const auto cclass = static_cast<EngineStructs::Struct*>(classObject->target);
+						if(!cclass->noFixedSize)
+							currentMember->size = cclass->maxSize * (currentMember->arrayDim <= 0 ? 1 : currentMember->arrayDim);
+					}
 				}
 			}
-		}
-	};
+		};
 
 
 	auto genUnknownMember = [&](int from, int to, int special)
-	{
-		EngineStructs::Member unknown;
-		unknown.missed = true;
-		unknown.size = to - from;
-		char name[30];
-		sprintf_s(name, "UnknownData%02d_%d[0x%X]", eStruct.unknownCount++, special, unknown.size);
-		unknown.name = std::string(name);
-		unknown.type = { false, PropertyType::BoolProperty, TYPE_UCHAR };
-		unknown.offset = from;
-		eStruct.undefinedMembers.push_back(unknown);
-		eStruct.cookedMembers.push_back(std::pair(false, eStruct.undefinedMembers.size() - 1));
-	};
+		{
+			EngineStructs::Member unknown;
+			unknown.missed = true;
+			unknown.size = to - from;
+			char name[30];
+			sprintf_s(name, "UnknownData%02d_%d[0x%X]", eStruct.unknownCount++, special, unknown.size);
+			unknown.name = std::string(name);
+			unknown.type = { false, PropertyType::BoolProperty, TYPE_UCHAR };
+			unknown.offset = from;
+			eStruct.undefinedMembers.push_back(unknown);
+			eStruct.cookedMembers.push_back(std::pair(false, eStruct.undefinedMembers.size() - 1));
+		};
 
 	//end bit exclusive
 	auto genUnknownBits = [&](int startOffset, int endOffset, int startBit, int endBit)
-	{
-		//weird
-		if (endOffset < startOffset)
-			return;
-
-		//weird aswell
-		if (endOffset == startOffset && startBit >= endBit)
-			return;
-
-		//are we here many offsets apart??
-		//0x5:3
-		//0x7:1
-		//->
-		//0x5:3
-		//0x6 unknownmember[0x1]
-		//0x7:0 unk (handled by while)
-		//0x7:1
-		if (endOffset - startOffset > 1)
 		{
-			//fill that with a unknownmember instead of bits
-			//if the start bit is 0, which indicates the last defined bit was a 8th bit,
-			//we dont have to increase the startOffset as it would directly fit, however of the
-			//startbit is something else, we have to increase the start offset
-			//----case 1 ----
-			// 0x10: 00000000 <- last defined bit was 8th, function gets called with 0x11 startOffset and startbit 0 
-			// 0x11: unknown
-			//----case 2 ----
-			// 0x10: 0000---- <- last defined bit was 4th, function gets called with 0x10 startoffset and startbit 5
-			// 0x11: unknown
-			genUnknownMember(startBit == 0 ? startOffset : startOffset + 1, endOffset, 3);
-			//check if the end is < 0, then we can just stop
-			if (endBit == 0)
+			//weird
+			if (endOffset < startOffset)
 				return;
-			//adjust, now we just gotta fill the bits until endbit
-			startOffset = endOffset;
-			startBit = 0;
-		}
 
-		while (true)
-		{
-			if (startOffset == endOffset && startBit == endBit)
+			//weird aswell
+			if (endOffset == startOffset && startBit >= endBit)
+				return;
+
+			//are we here many offsets apart??
+			//0x5:3
+			//0x7:1
+			//->
+			//0x5:3
+			//0x6 unknownmember[0x1]
+			//0x7:0 unk (handled by while)
+			//0x7:1
+			if (endOffset - startOffset > 1)
 			{
-				break;
+				//fill that with a unknownmember instead of bits
+				//if the start bit is 0, which indicates the last defined bit was a 8th bit,
+				//we dont have to increase the startOffset as it would directly fit, however of the
+				//startbit is something else, we have to increase the start offset
+				//----case 1 ----
+				// 0x10: 00000000 <- last defined bit was 8th, function gets called with 0x11 startOffset and startbit 0 
+				// 0x11: unknown
+				//----case 2 ----
+				// 0x10: 0000---- <- last defined bit was 4th, function gets called with 0x10 startoffset and startbit 5
+				// 0x11: unknown
+				genUnknownMember(startBit == 0 ? startOffset : startOffset + 1, endOffset, 3);
+				//check if the end is < 0, then we can just stop
+				if (endBit == 0)
+					return;
+				//adjust, now we just gotta fill the bits until endbit
+				startOffset = endOffset;
+				startBit = 0;
 			}
-			EngineStructs::Member unknown;
-			unknown.missed = true;
-			char name[30];
-			sprintf_s(name, "UnknownBit%02d", eStruct.unknownCount++);
-			unknown.name = std::string(name);
-			unknown.offset = startOffset;
-			unknown.size = 1;
-			unknown.type = { false, PropertyType::BoolProperty, TYPE_UCHAR };
-			unknown.isBit = true;
-			unknown.bitOffset = startBit++;
-			if (startBit >= 8) //should actually just be == 8 otherwise its super weird
+
+			while (true)
 			{
-				startBit = startBit % 8;
-				startOffset++;
+				if (startOffset == endOffset && startBit == endBit)
+				{
+					break;
+				}
+				EngineStructs::Member unknown;
+				unknown.missed = true;
+				char name[30];
+				sprintf_s(name, "UnknownBit%02d", eStruct.unknownCount++);
+				unknown.name = std::string(name);
+				unknown.offset = startOffset;
+				unknown.size = 1;
+				unknown.type = { false, PropertyType::BoolProperty, TYPE_UCHAR };
+				unknown.isBit = true;
+				unknown.bitOffset = startBit++;
+				if (startBit >= 8) //should actually just be == 8 otherwise its super weird
+				{
+					startBit = startBit % 8;
+					startOffset++;
+				}
+				eStruct.undefinedMembers.push_back(unknown);
+				eStruct.cookedMembers.push_back(std::pair(false, eStruct.undefinedMembers.size() - 1));
 			}
-			eStruct.undefinedMembers.push_back(unknown);
-			eStruct.cookedMembers.push_back(std::pair(false, eStruct.undefinedMembers.size() - 1));
-		}
-	};
+		};
 
 	if (eStruct.size - eStruct.getInheritedSize() == 0)
 		return;
@@ -757,10 +763,10 @@ void EngineCore::cookMemberArray(EngineStructs::Struct & eStruct)
 			genUnknownMember(inherStruct->maxSize, eStruct.definedMembers[0].offset, 8);
 		}
 	}
-	else if(!eStruct.definedMembers.empty())
+	else if (!eStruct.definedMembers.empty())
 	{
 		const auto& firstMember = eStruct.definedMembers[0];
-		if(firstMember.offset != 0)
+		if (firstMember.offset != 0)
 			genUnknownMember(0, eStruct.definedMembers[0].offset, 7);
 	}
 
@@ -903,6 +909,8 @@ void EngineCore::cacheFNames(int64_t & finishedNames, int64_t & totalNames, Copy
 	finishedNames = 0;
 	bool bIsFirstValidObject = true;
 
+	FILE* Log = NULL;
+
 	for (; finishedNames < ObjectsManager::gUObjectManager.UObjectArray.NumElements; finishedNames++)
 	{
 		const auto object = ObjectsManager::getUObjectByIndex<UObject>(finishedNames);
@@ -911,6 +919,7 @@ void EngineCore::cacheFNames(int64_t & finishedNames, int64_t & totalNames, Copy
 
 		//caches already if not cached, we dont have to use the result
 		auto res = object->getName();
+
 
 #if BREAK_IF_INVALID_NAME
 		if (bIsFirstValidObject && res != "/Script/CoreUObject")
@@ -924,11 +933,35 @@ void EngineCore::cacheFNames(int64_t & finishedNames, int64_t & totalNames, Copy
 
 #endif
 	}
+
+	if (true)
+	{
+		std::vector<std::pair<int, std::string>> FNameCacheSorted;
+		FNameCacheSorted.reserve(FNameCache.size());
+
+		// Copia i dati di FNameCache in FNameCacheSorted
+		for (const auto& pair : FNameCache) {
+			FNameCacheSorted.emplace_back(pair);
+		}
+
+		// Ordina FNameCacheSorted per ComparisonIndex
+		std::sort(FNameCacheSorted.begin(), FNameCacheSorted.end(), [](const auto& a, const auto& b) {
+			return a.first < b.first;
+			});
+
+		fopen_s(&Log, "./NameDump.txt", "w+");
+		for (const auto& pair : FNameCacheSorted)
+		{
+			fprintf(Log, "%10d %s\n", pair.first, pair.second.c_str());
+		}
+		fclose(Log);
+	}
+
 	status = CS_success;
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ONLY_LOG, "ENGINECORE", "Cached all FNames!");
 }
 
-void EngineCore::generatePackages(int64_t& finishedPackages, int64_t& totalPackages, CopyStatus& status)
+void EngineCore::generatePackages(int64_t & finishedPackages, int64_t & totalPackages, CopyStatus & status)
 {
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_INFO, "ENGINECORE", "Caching all Packages...");
 	status = CS_busy;
@@ -955,6 +988,7 @@ void EngineCore::generatePackages(int64_t& finishedPackages, int64_t& totalPacka
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ONLY_LOG, "ENGINECORE", "adding overriding unknown members....");
 	overrideUnknownMembers();
 
+
 	int numUStructsFound = 0;
 	int numEnumsFound = 0;
 	for (; finishedPackages < ObjectsManager::gUObjectManager.UObjectArray.NumElements; finishedPackages++)
@@ -974,14 +1008,13 @@ void EngineCore::generatePackages(int64_t& finishedPackages, int64_t& totalPacka
 			numUStructsFound++;
 			isUStruct = true;
 		}
-
 		if (object->IsA<UEnum>()) {
 			numEnumsFound++;
 			isEnum = true;
 		}
-
 		if (!isUStruct && !isEnum)
 			continue;
+
 
 		upackages[object->getSecondPackageName()].push_back(object);
 	}
@@ -991,6 +1024,9 @@ void EngineCore::generatePackages(int64_t& finishedPackages, int64_t& totalPacka
 	if (numEnumsFound == 0) {
 		windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_WARNING, "ENGINECORE", "WARN: No Enum objects found");
 	}
+
+	MessageBoxA(0, std::to_string(numUStructsFound).c_str(), "numUStructsFound", MB_OK);
+	MessageBoxA(0, std::to_string(numUStructsFound).c_str(), "numEnumsFound", MB_OK);
 
 	//reset the counter to 0 as we are using it again but this time really for packages
 	finishedPackages = 0;
@@ -1029,7 +1065,7 @@ void EngineCore::generatePackages(int64_t& finishedPackages, int64_t& totalPacka
 			}
 			usedNames.insert({ struc->cppName, package.packageName });
 		}
-	};
+		};
 
 	//package 0 is reserved for our special defined structs
 	for (auto& package : upackages)
@@ -1142,17 +1178,17 @@ const std::vector<std::string>& EngineCore::getAllUnknownTypes()
 	for (auto& pack : packages)
 	{
 		auto checkMembers = [&](const EngineStructs::Struct& struc) mutable
-		{
-			for (auto& member : struc.definedMembers)
 			{
-				if (!member.type.clickable || //not clickable? Skip
-					packageObjectInfos.contains(member.type.name) || //packageObjectInfos contains the name? Then its defined
-					std::ranges::find(unknownProperties, member.type.name) != unknownProperties.end()) //is it already in the vector? Skip
-					continue;
+				for (auto& member : struc.definedMembers)
+				{
+					if (!member.type.clickable || //not clickable? Skip
+						packageObjectInfos.contains(member.type.name) || //packageObjectInfos contains the name? Then its defined
+						std::ranges::find(unknownProperties, member.type.name) != unknownProperties.end()) //is it already in the vector? Skip
+						continue;
 
-				unknownProperties.push_back(member.type.name);
-			}
-		};
+					unknownProperties.push_back(member.type.name);
+				}
+			};
 
 		for (auto& struc : pack.structs)
 			checkMembers(struc);
@@ -1178,7 +1214,7 @@ void EngineCore::createStruct(const EngineStructs::Struct & eStruct)
 	customStructs.push_back(eStruct);
 }
 
-void EngineCore::createEnum(const EngineStructs::Enum& eEnum)
+void EngineCore::createEnum(const EngineStructs::Enum & eEnum)
 {
 	if (std::ranges::find(customEnums, eEnum) != customEnums.end())
 		return;
@@ -1207,45 +1243,45 @@ void EngineCore::finishPackages()
 		package.index = i;
 
 		auto fillMissingDataForStructs = [&](std::vector<EngineStructs::Struct>& structs)
-		{
-			for (int j = 0; j < structs.size(); j++)
 			{
-				auto& struc = structs[j];
-				struc.owningPackage = &package;
-				struc.owningVectorIndex = j;
-
-				const auto OI_type = struc.isClass ? ObjectInfo::OI_Class : ObjectInfo::OI_Struct;
-				if (packageObjectInfos.contains(struc.cppName))
+				for (int j = 0; j < structs.size(); j++)
 				{
-					windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_WARNING, "ENGINECORE", "Duplicate name found: %s", struc.cppName.c_str());
+					auto& struc = structs[j];
+					struc.owningPackage = &package;
+					struc.owningVectorIndex = j;
 
-					if (!duplicatedClassNames.contains(struc.cppName))
-						duplicatedClassNames.insert(struc.cppName);
-					struc.cppName += "dup_" + std::to_string(duplicatedNames++);
-					
+					const auto OI_type = struc.isClass ? ObjectInfo::OI_Class : ObjectInfo::OI_Struct;
+					if (packageObjectInfos.contains(struc.cppName))
+					{
+						windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_WARNING, "ENGINECORE", "Duplicate name found: %s", struc.cppName.c_str());
+
+						if (!duplicatedClassNames.contains(struc.cppName))
+							duplicatedClassNames.insert(struc.cppName);
+						struc.cppName += "dup_" + std::to_string(duplicatedNames++);
+
+					}
+					packageObjectInfos.insert(std::pair(struc.cppName, ObjectInfo(true, OI_type, &struc)));
+					package.combinedStructsAndClasses.push_back(&struc);
+
+					for (int k = 0; k < struc.functions.size(); k++)
+					{
+						auto& func = struc.functions[k];
+						func.owningVectorIndex = k;
+						func.owningStruct = &struc;
+						package.functions.push_back(&func);
+
+						packageObjectInfos.insert(std::pair(func.cppName, ObjectInfo(true, ObjectInfo::OI_Function, &func)));
+
+					}
+
+					//empty structs have a size of 1
+					if (!struc.isClass && struc.maxSize == 0)
+					{
+						struc.size = 1;
+						struc.maxSize = 1;
+					}
 				}
-				packageObjectInfos.insert(std::pair(struc.cppName, ObjectInfo(true, OI_type, &struc)));
-				package.combinedStructsAndClasses.push_back(&struc);
-
-				for (int k = 0; k < struc.functions.size(); k++)
-				{
-					auto& func = struc.functions[k];
-					func.owningVectorIndex = k;
-					func.owningStruct = &struc;
-					package.functions.push_back(&func);
-
-					packageObjectInfos.insert(std::pair(func.cppName, ObjectInfo(true, ObjectInfo::OI_Function, &func)));
-
-				}
-
-				//empty structs have a size of 1
-				if(!struc.isClass && struc.maxSize == 0)
-				{
-					struc.size = 1;
-					struc.maxSize = 1;
-				}
-			}
-		};
+			};
 
 		fillMissingDataForStructs(package.classes);
 		fillMissingDataForStructs(package.structs);
@@ -1301,11 +1337,11 @@ void EngineCore::finishPackages()
 			}
 
 			//this check works only with broken structs
-			if(struc->supers.size() > 0)
+			if (struc->supers.size() > 0)
 			{
 				//is the super max size is greater than the max size of the struct itself we have some weird cringe struc
 				auto super = struc->supers[0];
-				if(super->maxSize > struc->maxSize)
+				if (super->maxSize > struc->maxSize)
 				{
 					struc->maxSize = super->maxSize;
 					struc->size = super->maxSize;
@@ -1323,7 +1359,7 @@ void EngineCore::finishPackages()
 				//if the type is a type where dumplicate classes exist, we have to erase it
 				//theres no way to know which one of the dup classes it refers to
 				//or maybe there is a way? maybe in the future with pointers or so....
-				if(duplicatedClassNames.contains(var.type.name))
+				if (duplicatedClassNames.contains(var.type.name))
 				{
 					var.type.clickable = false;
 					var.type.propertyType = PropertyType::Int8Property;
@@ -1363,20 +1399,20 @@ void EngineCore::finishPackages()
 		{
 			auto& ret = func->returnType;
 			auto addInfoPtr = [&](fieldType& type)
-			{
-				if (type.clickable)
 				{
-					const auto info = getInfoOfObject(type.name);
-					if (info && info->valid)
+					if (type.clickable)
 					{
-						type.info = info;
+						const auto info = getInfoOfObject(type.name);
+						if (info && info->valid)
+						{
+							type.info = info;
 
-						const auto targetPack = info->type == ObjectInfo::OI_Enum ? static_cast<EngineStructs::Enum*>(info->target)->owningPackage : static_cast<EngineStructs::Struct*>(info->target)->owningPackage;
-						if (targetPack->index != package.index)
-							package.dependencyPackages.insert(targetPack);
+							const auto targetPack = info->type == ObjectInfo::OI_Enum ? static_cast<EngineStructs::Enum*>(info->target)->owningPackage : static_cast<EngineStructs::Struct*>(info->target)->owningPackage;
+							if (targetPack->index != package.index)
+								package.dependencyPackages.insert(targetPack);
+						}
 					}
-				}
-			};
+				};
 			addInfoPtr(ret);
 
 			for (auto& param : func->params)
@@ -1656,60 +1692,60 @@ void EngineCore::generateStructDefinitionsFile()
 
 
 	auto printToFile = [&](std::unordered_map<std::string, EngineStructs::Struct>& map) mutable
-	{
-		auto boolToSt = [](bool b)
 		{
-			return b ? "true" : "false";
-		};
-
-		for (auto& val : map | std::views::values)
-		{
-			std::string spacing = "    ";
-			std::string objectName = "s" + val.cppName;
-			file << spacing << "EngineStructs::Struct " << objectName << ";" << std::endl;
-			file << spacing << objectName << ".fullName = " << "\"" << val.fullName << "\";" << std::endl;
-			file << spacing << objectName << ".cppName = " << "\"" << val.cppName << "\";" << std::endl;
-			file << spacing << objectName << ".size = " << val.size << ";" << std::endl;
-			file << spacing << objectName << ".inherited = " << boolToSt(val.inherited) << ";" << std::endl;
-			file << spacing << objectName << ".isClass = " << boolToSt(val.isClass) << ";" << std::endl;
-			file << spacing << objectName << ".members = std::vector<EngineStructs::Member> {" << std::endl;
-			for (int i = 0; i < val.cookedMembers.size(); i++)
-			{
-				auto printFieldType = [&](const fieldType& type) mutable
+			auto boolToSt = [](bool b)
 				{
-					file << "{" << boolToSt(type.clickable) << ", " << getStringFromPropertyType(type.propertyType)
-						<< ", \"" << type.name << "\"";
+					return b ? "true" : "false";
 				};
 
-				const auto member = val.getMemberForIndex(i);
-				file << spacing << spacing << "{";
-				printFieldType(member->type);
-
-				if (member->type.subTypes.size() > 0)
+			for (auto& val : map | std::views::values)
+			{
+				std::string spacing = "    ";
+				std::string objectName = "s" + val.cppName;
+				file << spacing << "EngineStructs::Struct " << objectName << ";" << std::endl;
+				file << spacing << objectName << ".fullName = " << "\"" << val.fullName << "\";" << std::endl;
+				file << spacing << objectName << ".cppName = " << "\"" << val.cppName << "\";" << std::endl;
+				file << spacing << objectName << ".size = " << val.size << ";" << std::endl;
+				file << spacing << objectName << ".inherited = " << boolToSt(val.inherited) << ";" << std::endl;
+				file << spacing << objectName << ".isClass = " << boolToSt(val.isClass) << ";" << std::endl;
+				file << spacing << objectName << ".members = std::vector<EngineStructs::Member> {" << std::endl;
+				for (int i = 0; i < val.cookedMembers.size(); i++)
 				{
-					file << ", std::vector<fieldType>{";
-					for (int j = 0; j < member->type.subTypes.size(); j++)
+					auto printFieldType = [&](const fieldType& type) mutable
+						{
+							file << "{" << boolToSt(type.clickable) << ", " << getStringFromPropertyType(type.propertyType)
+								<< ", \"" << type.name << "\"";
+						};
+
+					const auto member = val.getMemberForIndex(i);
+					file << spacing << spacing << "{";
+					printFieldType(member->type);
+
+					if (member->type.subTypes.size() > 0)
 					{
-						printFieldType(member->type.subTypes[j]);
+						file << ", std::vector<fieldType>{";
+						for (int j = 0; j < member->type.subTypes.size(); j++)
+						{
+							printFieldType(member->type.subTypes[j]);
+							file << "}";
+							if (j < member->type.subTypes.size() - 1)
+								file << ",";
+						}
 						file << "}";
-						if (j < member->type.subTypes.size() - 1)
-							file << ",";
 					}
-					file << "}";
-				}
-				file << "}, \"" << member->name << "\", " << member->offset << ", " << member->size << ", " << boolToSt(member->missed);
-				if (member->isBit)
-				{
+					file << "}, \"" << member->name << "\", " << member->offset << ", " << member->size << ", " << boolToSt(member->missed);
+					if (member->isBit)
+					{
 
-					file << ", " << boolToSt(member->isBit) << ", " << (member->bitOffset >= 99 ? member->bitOffset - 99 : member->bitOffset) << ", " << boolToSt(member->userEdited);
+						file << ", " << boolToSt(member->isBit) << ", " << (member->bitOffset >= 99 ? member->bitOffset - 99 : member->bitOffset) << ", " << boolToSt(member->userEdited);
+					}
+					file << "}," << std::endl;
 				}
-				file << "}," << std::endl;
+				file << spacing << "};" << std::endl;
+				file << spacing << "EngineCore::overrideStructMembers(" << objectName << ");\n\n" << std::endl;
+
 			}
-			file << spacing << "};" << std::endl;
-			file << spacing << "EngineCore::overrideStructMembers(" << objectName << ");\n\n" << std::endl;
-
-		}
-	};
+		};
 
 	file << "/// overrideStructs\n" << std::endl;
 	printToFile(overridingStructs);
