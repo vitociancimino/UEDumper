@@ -29,21 +29,21 @@ public:
 
 #if defined(DFHO)
 
-	uint64_t                                           objectptr = 0;                                                     // 0x0000   (0x0008)  
-	unsigned char                                      UnknownData00_6[0x8];                                       // 0x0008   (0x0008)  MISSED
-	class UClass* ClassPrivate = nullptr;                                              // 0x0010   (0x0008)  
-	class UObject* OuterPrivate = nullptr;                                      // 0x0018   (0x0008)  
-	EObjectFlags                                       ObjectFlags = RF_NoFlags;                                                // 0x0020   (0x0004)  
-	FName                                              NamePrivate = FName();                                               // 0x0024   (0x0008)  
-	int32_t                                            InternalIndex = 0;
+	uint64_t                                           objectptr = 0;                       // 0x0000   (0x0008)  
+	unsigned char                                      UnknownData00_6[0x8];				// 0x0008   (0x0008)  MISSED
+	class UClass* ClassPrivate = nullptr;													// 0x0010   (0x0008)  
+	class UObject* OuterPrivate = nullptr;													// 0x0018   (0x0008)  
+	EObjectFlags                                       ObjectFlags = RF_NoFlags;            // 0x0020   (0x0004)  
+	FName                                              NamePrivate = FName();               // 0x0024   (0x0008)  
+	int32_t                                            InternalIndex = 0;				    // 0x002C   (0x0004)
 
 #else
-	uint64_t			objectptr = 0;
-	EObjectFlags		ObjectFlags = RF_NoFlags;
-	int32_t				InternalIndex = 0;
-	class UClass* ClassPrivate = nullptr;
-	FName				NamePrivate = FName();
-	class UObject* OuterPrivate = nullptr;
+	uint64_t			objectptr = 0;            // 0x0000 (0x0008)
+	EObjectFlags		ObjectFlags = RF_NoFlags; // 0x0008 (0x0004)
+	int32_t				InternalIndex = 0;	   // 0x000C (0x0004)
+	class UClass* ClassPrivate = nullptr; // 0x0010 (0x0008)
+	FName				NamePrivate = FName(); // 0x0018 (0x0008)
+	class UObject* OuterPrivate = nullptr; // 0x0020 (0x0008)
 #endif
 
 	/** Object this object resides in. */
@@ -60,7 +60,7 @@ public:
 
 	UClass* getClass() const;
 
-	std::string getName() const;
+	std::string getName(bool uProperty = false) const;
 
 	static std::string getName(const FName& fName);
 
@@ -193,19 +193,17 @@ class UStruct : public UField
 public:
 	using UField::UField;
 
-#if UE_VERSION >= UE_4_22
-#if USTRUCT_FAST_ISCHILDOF_IMPL
-	FStructBaseChain baseChainInheritance;
-#endif
-#endif
+	unsigned char UnknownData00_3[0x10];	// 0x0038 (0x0010)
+	int32_t		PropertiesSize;				// 0x0048 (0x0004)
+	unsigned char UnknownData00_4[0x4];		// 0x004C (0x0004)
 
 #if UE_VERSION < UE_5_03
-	/** Struct this inherits from, may be null */
-	UStruct* SuperStruct;
+	UStruct* SuperStruct;					 // 0x0050 (0x0008)
+	int32_t		MinAlignment;				 // 0x0058 (0x0004)
 
-	/** Pointer to start of linked list of child fields */
-	UField* Children;
+	unsigned char UnknownData00_5[0x24];    
 
+	UField* Children;						 // 0x0080 (0x0008)
 #else
 	//commented out because its the same (most of the cases)
 	//TNonAccessTrackedObjectPtr<UStruct> SuperStruct;
@@ -220,31 +218,26 @@ public:
 	FField* ChildProperties;
 #endif
 
-	/** Total size of all UProperties, the allocated structure may be larger due to alignment */
-	int32_t		PropertiesSize;
 
-	/** Alignment of structure in memory, structure will be at least this large */
-	int32_t		MinAlignment;
-
-	/** Script byte code associated with this object */
-	TArray<uint8_t> Script;
+	///** Script byte code associated with this object */
+	//TArray<uint8_t> Script;
 
 #if UE_VERSION < UE_4_25
 	/** In memory only: Linked list of properties from most-derived to base */
-	UProperty* PropertyLink;
+	//UProperty* PropertyLink;
 
-	/** In memory only: Linked list of object reference properties from most-derived to base */
-	UProperty* RefLink;
+	///** In memory only: Linked list of object reference properties from most-derived to base */
+	//UProperty* RefLink;
 
-	/** In memory only: Linked list of properties requiring destruction. Note this does not include things that will be destroyed byt he native destructor */
-	UProperty* DestructorLink;
+	///** In memory only: Linked list of properties requiring destruction. Note this does not include things that will be destroyed byt he native destructor */
+	//UProperty* DestructorLink;
 
-	/** In memory only: Linked list of properties requiring post constructor initialization */
-	UProperty* PostConstructLink;
+	///** In memory only: Linked list of properties requiring post constructor initialization */
+	//UProperty* PostConstructLink;
 
 
-	/** Array of object references embedded in script code. Mirrored for easy access by realtime garbage collection code */
-	TArray<UObject*> ScriptObjectReferences;
+	///** Array of object references embedded in script code. Mirrored for easy access by realtime garbage collection code */
+	//TArray<UObject*> ScriptObjectReferences;
 
 
 
@@ -429,15 +422,17 @@ public:
 	using UField::UField;
 
 	// Persistent variables.
-	int32_t		ArrayDim;
-	int32_t		ElementSize;
-	uint64_t	PropertyFlags;
-	uint16_t	RepIndex;
+	//char pad[4]; // 0x0038 (0x0004)
 
-	uint8_t		BlueprintReplicationCondition;
-	int32_t		Offset;
+	int32_t		ArrayDim;    // 0x003C (0x0004)
+	int32_t		ElementSize;  // 0x0040 (0x0004)
+	uint64_t	PropertyFlags; // 0x0048 (0x0008)
+	uint16_t	RepIndex; 
 
-	FName		RepNotifyFunc;
+	uint8_t		BlueprintReplicationCondition; 
+	int32_t		Offset; 
+
+	FName		RepNotifyFunc; 
 
 	/** In memory only: Linked list of properties from most-derived to base **/
 	UProperty* PropertyLinkNext;

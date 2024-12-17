@@ -386,11 +386,10 @@ public:
 				return nullptr;
 
 			std::string cname = obj->getFullName();
-			
-			//MessageBoxA(0, "generatePackages", "generatePackages", MB_OK);
 
 			if (cname == name)
-			{		
+			{
+				//MessageBoxA(0, "trovato", "FullName", 0);
 				//FullStringCache.insert(std::pair(name, ptr));
 				//just insert here, we make a findobject only on specific objects 
 				EngineCore::fullStringCache.insert(std::pair(cname, ptr));

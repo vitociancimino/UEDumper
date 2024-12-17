@@ -7,7 +7,6 @@
 #include "Frontend/Windows/PackageViewerWindow.h"
 #include "Settings/EngineSettings.h"
 
-
 //https://github.com/EpicGames/UnrealEngine/blob/4.25/Engine/Source/Runtime/Core/Private/UObject/UnrealNames.cpp
 //https://github.com/EpicGames/UnrealEngine/blob/4.25/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h
 //FName::ToString
@@ -32,131 +31,157 @@ std::string generateValidVarName(const std::string& str)
 	return result;
 };
 
+
+bool gnamesDumped = false;
+
+struct GNamesChunk
+{
+	uintptr_t start;
+	uintptr_t end;
+};
+
+struct GNamesElement
+{
+	int Chunk;
+	int ComprarisionIndex;
+	std::string Name;
+};
+
+std::vector<GNamesElement>GnamesCache;
+
+std::vector<GNamesChunk>GNamesChunkChache;
+
+bool validCharsInName(char* name)
+{
+	for (size_t i = 0; i < strlen(name); i++)
+	{
+		if (name[i] < 32 || name[i] > 126)
+			return false;
+	}
+	return true;
+}
+
+void EngineCore::dumpChunkedGnames(uintptr_t gnames, bool dectypt)
+{
+	while (true)
+	{
+		uintptr_t chunkPtr = Memory::read<uintptr_t>(gnames + 8 + (GNamesChunkChache.size() * 8));
+		if (!chunkPtr)
+			break;
+
+		GNamesChunk chunk;
+		chunk.start = chunkPtr;
+
+		for (size_t i = 0; ; i++)
+		{
+			byte b = Memory::read<byte>(chunk.start + i);
+			if (!b)
+			{
+				byte b1 = Memory::read<byte>(chunk.start + i + 1);
+				byte b2 = Memory::read<byte>(chunk.start + i + 2);
+				byte b3 = Memory::read<byte>(chunk.start + i + 3);
+				byte b4 = Memory::read<byte>(chunk.start + i + 4);
+
+				if (!b1 && !b2 && !b3 && !b4)
+				{
+					chunk.end = chunk.start + i;
+					GNamesChunkChache.push_back(chunk);
+					break;
+				}
+			}
+		}
+	}
+
+	for (size_t i = 0; i < GNamesChunkChache.size(); i++)
+	{
+		printf("Chunk %d: 0x%llX - 0x%llX\n", i, GNamesChunkChache[i].start, GNamesChunkChache[i].end);
+	}
+
+	for (size_t i = 0; i < GNamesChunkChache.size(); i++)
+	{
+		uintptr_t current = GNamesChunkChache[i].start;
+		while (true)
+		{
+		repeat:
+
+			int lenght = Memory::read<uint16_t>(current) >> 6;
+
+			if (lenght <= 0 || lenght > 1024)
+			{
+				current++;
+				goto repeat;
+			}
+
+			char name[1024];
+			Memory::read(reinterpret_cast<void*>(current + 2), name, lenght);
+
+			if (dectypt)
+				fname_decrypt(name, lenght);
+
+			name[lenght] = '\0';
+
+			if (!validCharsInName(name))
+			{
+				current++;
+				goto repeat;
+			}
+
+			GNamesElement element;
+			element.Chunk = i;
+			element.ComprarisionIndex = (current - GNamesChunkChache[i].start) / 2;
+			element.Name = std::string(name);
+
+			GnamesCache.push_back(element);
+
+			current += 2 + lenght;
+
+			if (current >= GNamesChunkChache[i].end)
+				break;
+
+		}
+	}
+}
+
 //we always compare this function to FName::ToString(FString& Out) in the source code
 std::string EngineCore::FNameToString(FName fname)
 {
-	if (FNameCache.contains(fname.ComparisonIndex))
-	{
-		return FNameCache[fname.ComparisonIndex];
-	}
 
-	//unreal engine 4.19 - 4.22 fname read function
-#if UE_VERSION < UE_4_23
-
-	// the game doesnt use chunks so its completely different
-	// lets take a look at the func at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Private/UObject/UnrealNames.cpp#L942
-	// we first get how the FNameEntry is determined and then how FNameEntry::AppendNameToString( FString& String ) works which
-	// returns the plain string.
-	// lets look at how the FNameEntry is determined. The ToString function calls FName::GetDisplayNameEntry() to return a FNameEntry*
-	// and the func is at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Private/UObject/UnrealNames.cpp#L919
-	// that gets the Names array and the index via GetDisplayIndex() which is at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h#L579
-	// which just calls GetDisplayIndexFast() and returns the DisplayIndex or ComparisonIndex depending on WITH_CASE_PRESERVING_NAME. See
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h#L1192
-	// now lets determine the Names array. The Names array is a TNameEntryArray. But what is TNameEntryArray? Its defined at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h#L489
-	// which is a TStaticIndirectArrayThreadSafeRead thats defined at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h#L342
-	// where we look at the function that returns the pointer at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h#L391
-	// we see it takes a Index as param like the one from GetDisplayIndex() and does following:
-	// int32 ChunkIndex = Index / ElementsPerChunk;
-	// int32 WithinChunkIndex = Index % ElementsPerChunk;
-	// where ElementsPerChunk is 16384 or 0x4000.
-	// and gets the ElementType** Chunk = Chunks[ChunkIndex]; (ElementType is FNameEntry)
-	// where the Chunks array is just the gnames array.
-	// the gnames array holds pointers to the FNameEntries
-	// the following gets returned: Chunk + WithinChunkIndex;
-	// this will be our FNameEntry**!
-	// now lets go to FNameEntry::AppendNameToString( FString& String ) which is at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Private/UObject/UnrealNames.cpp#L126
-	// which just returns the WideName or AnsiName
-	// which is at FNameEntry at offset 0x16 looking at
-	// https://github.com/EpicGames/UnrealEngine/blob/4.19/Engine/Source/Runtime/Core/Public/UObject/NameTypes.h#L138
-	// thats it, we just need to get the bytes there!
-	// the representative code:
-	constexpr auto ElementsPerChunk = 0x4000;
-
-	enum { NAME_SIZE = 1024 };
-
-	char name[NAME_SIZE + 1] = { 0 };
-
-#if WITH_CASE_PRESERVING_NAME
-	const int32_t Index = fname.DisplayIndex;
-#else
-	const int32_t Index = fname.ComparisonIndex;
-#endif
-
-	const int32_t ChunkIndex = Index / ElementsPerChunk;
-	const int32_t WithinChunkIndex = Index % ElementsPerChunk;
-
-	//GNAMES_POOL_OFFSET exists as theres always a offset for whatever reason. Check this in IDA!!!!!!!!!
-	const uint64_t ElementType = Memory::read<uint64_t>(gNames + 8 * ChunkIndex + GNAMES_POOL_OFFSET);
-
-	//WithinChunkIndex * 8 as its full of pointers
-	const auto FNameEntryPtrPtr = ElementType + (WithinChunkIndex * 8);
-
-	const auto FNameEntryPtr = Memory::read<uint64_t>(FNameEntryPtrPtr);
-
-	//read the bytes
-#if UE_VERSION == UE_4_22
-	const uint64_t AnsiName = FNameEntryPtr + 0xC;
-#else
-	const uint64_t AnsiName = FNameEntryPtr + 0x10;
-#endif
-
-
-	Memory::read(
-		reinterpret_cast<void*>(AnsiName),
-		name,
-		NAME_SIZE
-	);
-
-#else // >= 4_23
-
-	enum { NAME_SIZE = 1024 };
-
-	char name[NAME_SIZE + 1] = { 0 };
-
-	//>4.23 name chunks exist
 #if defined(DFHO)
-	const unsigned int chunkOffset = fname.ComparisonIndex >> 18; //HIWORD
-	const unsigned short nameOffset = fname.ComparisonIndex & 0x3FFFF; //unsigned __int16
+	const unsigned int chunkOffset = fname.ComparisonIndex >> 18;
+	const unsigned short nameOffset = fname.ComparisonIndex & 0x3FFFF;
 #else
-	const unsigned int chunkOffset = fname.ComparisonIndex >> 16; //HIWORD
-	const unsigned short nameOffset = fname.ComparisonIndex; //unsigned __int16
+	const unsigned int chunkOffset = fname.ComparisonIndex >> 16;
+	const unsigned short nameOffset = fname.ComparisonIndex;
 #endif
 
-	//average function since 4.25
-	//https://github.com/EpicGames/UnrealEngine/blob/5.1/Engine/Source/Runtime/Core/Private/UObject/UnrealNames.cpp#L3375
-
-#if WITH_CASE_PRESERVING_NAME
-	uint64_t namePoolChunk = Memory::read<uint64_t>(gNames + 8 * (chunkOffset + 2)) + 4 * nameOffset;
-
-	const auto nameLength = Memory::read<uint16_t>(namePoolChunk + 4) >> 1;
-
-	if (nameLength > NAME_SIZE)
+	//cerco dentro la cache
+	for (const auto& pair : GnamesCache)
 	{
-		// we're about to corrupt our memory in the next call to Memory::read if we don't clamp the value!
-		windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ERROR, "CORE", "Memory corruption avoided! FName nameLength > NAME_SIZE! Setting WITH_CASE_PRESERVING_NAME=TRUE might resolve this issue");
-		puts("Memory corruption avoided! FName nameLength > NAME_SIZE! Setting WITH_CASE_PRESERVING_NAME=TRUE might resolve this issue");
-		//DebugBreak();
+#ifdef DFHO
+		if (pair.Chunk == chunkOffset && pair.ComprarisionIndex == (fname.ComparisonIndex & 0x3FFFF))
+#else
+		if (pair.Chunk == chunkOffset && pair.ComprarisionIndex == (fname.ComparisonIndex))
+#endif 
+
+		{
+			return pair.Name;
+		}
 	}
 
-	Memory::read(
-		reinterpret_cast<void*>(namePoolChunk + 6),
-		name,
-		// safeguard against overflow and memory corruption
-		nameLength < NAME_SIZE ? nameLength : NAME_SIZE
-	);
-#else
-	int64_t namePoolChunk = Memory::read<uint64_t>(gNames + 8 * (chunkOffset + 2)) + (2 * nameOffset);
+	if (gnamesDumped)
+	{
+		windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ERROR, "CORE", "FName not found in cache! FNameToString failed!");
+		return "null";
+	}
 
+	const int NAME_SIZE = 1024;
+	char name[NAME_SIZE + 1] = { 0 };
+
+
+	int64_t namePoolChunk = Memory::read<uint64_t>(gNames + 8 * (chunkOffset + 1)) + (2 * nameOffset);
 	const auto nameLength = Memory::read<uint16_t>(namePoolChunk) >> 6;
 
-	if (nameLength > NAME_SIZE)
+	if (nameLength > 1024)
 	{
 		// we're about to corrupt our memory in the next call to Memory::read if we don't clamp the value!
 		windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ERROR, "CORE", "Memory corruption avoided! FName nameLength > NAME_SIZE! Setting WITH_CASE_PRESERVING_NAME=TRUE might resolve this issue");
@@ -167,28 +192,26 @@ std::string EngineCore::FNameToString(FName fname)
 	Memory::read(
 		reinterpret_cast<void*>(namePoolChunk + 2),
 		name,
-		// safeguard against overflow and memory corruption
 		nameLength < NAME_SIZE ? nameLength : NAME_SIZE
 	);
-#endif
 
-#endif
 
 #if USE_FNAME_ENCRYPTION
-	//decrypt the FNames buffer
-	//if (fname.ComparisonIndex > 65463 && fname.ComparisonIndex < 263265)
-	//	fname_decrypt2(name, nameLength);
-	//else
-		fname_decrypt(name, nameLength);
+	fname_decrypt(name, nameLength);
+	name[nameLength] = '\0';
 #endif
 
 	std::string finalName = std::string(name);
 
 	if (finalName.empty())
 		finalName = "null";
-	//throw std::runtime_error("empty name is trying to get cached");
 
-	FNameCache.insert(std::pair(fname.ComparisonIndex, std::string(name)));
+	GNamesElement element;
+	element.Chunk = chunkOffset;
+	element.ComprarisionIndex = fname.ComparisonIndex;
+	element.Name = std::string(name);
+
+	GnamesCache.push_back(element);
 
 	return finalName;
 }
@@ -302,7 +325,6 @@ bool EngineCore::generateStructOrClass(UStruct* object, std::vector<EngineStruct
 #if UE_VERSION < UE_4_25
 	if (object->Children)
 	{
-
 		for (auto child = object->getChildren(); child; child = child->getNext())
 		{
 			if (ObjectsManager::CRITICAL_STOP_CALLED())
@@ -315,7 +337,7 @@ bool EngineCore::generateStructOrClass(UStruct* object, std::vector<EngineStruct
 			EngineStructs::Member member;
 			member.size = prop->ElementSize * prop->ArrayDim;
 			member.arrayDim = prop->ArrayDim;
-			member.name = generateValidVarName(prop->getName());
+			member.name = generateValidVarName(prop->getName(true));
 			//should not happen
 			if (member.size == 0)
 			{
@@ -642,7 +664,7 @@ void EngineCore::cookMemberArray(EngineStructs::Struct & eStruct)
 					if (classObject->type == ObjectInfo::OI_Struct || classObject->type == ObjectInfo::OI_Class)
 					{
 						const auto cclass = static_cast<EngineStructs::Struct*>(classObject->target);
-						if(!cclass->noFixedSize)
+						if (!cclass->noFixedSize)
 							currentMember->size = cclass->maxSize * (currentMember->arrayDim <= 0 ? 1 : currentMember->arrayDim);
 					}
 				}
@@ -903,13 +925,21 @@ bool EngineCore::initSuccess()
 
 void EngineCore::cacheFNames(int64_t & finishedNames, int64_t & totalNames, CopyStatus & status)
 {
+
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ONLY_LOG, "ENGINECORE", "Caching FNames...");
 	status = CS_busy;
 	totalNames = ObjectsManager::gUObjectManager.UObjectArray.NumElements;
 	finishedNames = 0;
 	bool bIsFirstValidObject = true;
 
-	FILE* Log = NULL;
+#if defined(DFHO)
+	if (!gnamesDumped)
+	{
+		dumpChunkedGnames(gNames, true);
+		gnamesDumped = true;
+	}
+#endif
+
 
 	for (; finishedNames < ObjectsManager::gUObjectManager.UObjectArray.NumElements; finishedNames++)
 	{
@@ -934,32 +964,41 @@ void EngineCore::cacheFNames(int64_t & finishedNames, int64_t & totalNames, Copy
 #endif
 	}
 
-	if (true)
+	if (false) // stampo su file GNamesChache ordinata per chunk e index
 	{
-		std::vector<std::pair<int, std::string>> FNameCacheSorted;
-		FNameCacheSorted.reserve(FNameCache.size());
+		FILE* Log = NULL;
+		std::ofstream FNameFile("FNames.txt");
 
-		// Copia i dati di FNameCache in FNameCacheSorted
-		for (const auto& pair : FNameCache) {
-			FNameCacheSorted.emplace_back(pair);
-		}
+		totalNames = GnamesCache.size();
 
-		// Ordina FNameCacheSorted per ComparisonIndex
-		std::sort(FNameCacheSorted.begin(), FNameCacheSorted.end(), [](const auto& a, const auto& b) {
-			return a.first < b.first;
+		// Ordina GnamesCache per Chunk e ComprarisionIndex
+		std::sort(GnamesCache.begin(), GnamesCache.end(), [](const GNamesElement& a, const GNamesElement& b) {
+			if (a.Chunk == b.Chunk)
+				return a.ComprarisionIndex < b.ComprarisionIndex;
+			return a.Chunk < b.Chunk;
 			});
 
-		fopen_s(&Log, "./NameDump.txt", "w+");
-		for (const auto& pair : FNameCacheSorted)
+		FNameFile << "FName dump generated by UEDumper by Spuckwaffel.\n\n\n";
+
+		for (const auto& element : GnamesCache)
 		{
-			fprintf(Log, "%10d %s\n", pair.first, pair.second.c_str());
+			char buff[2000] = { 0 };
+			if (element.Name.length() > 1900)
+			{
+				FNameFile << "Name for id " << element.ComprarisionIndex << " too long!\n";
+				continue;
+			}
+
+			sprintf_s(buff, sizeof(buff), "Chunk: %d, Index: %d, Name: %s", element.Chunk, element.ComprarisionIndex, element.Name.c_str());
+			FNameFile << buff << std::endl;
 		}
-		fclose(Log);
+		FNameFile.close();
 	}
 
 	status = CS_success;
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_ONLY_LOG, "ENGINECORE", "Cached all FNames!");
 }
+
 
 void EngineCore::generatePackages(int64_t & finishedPackages, int64_t & totalPackages, CopyStatus & status)
 {
@@ -1005,6 +1044,12 @@ void EngineCore::generatePackages(int64_t & finishedPackages, int64_t & totalPac
 
 		bool isUStruct = false, isEnum = false;
 		if (object->IsA<UStruct>()) {
+
+			if (object->getName() == "FVector" || object->getName() == "Vector")
+			{
+				printf("%s %p", object->getName(), object->getOwnPointer());
+				MessageBoxA(NULL, "UStruct", "UStruct", MB_OK);
+			}
 			numUStructsFound++;
 			isUStruct = true;
 		}
@@ -1015,9 +1060,9 @@ void EngineCore::generatePackages(int64_t & finishedPackages, int64_t & totalPac
 		if (!isUStruct && !isEnum)
 			continue;
 
-
 		upackages[object->getSecondPackageName()].push_back(object);
 	}
+
 	if (numUStructsFound == 0) {
 		windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_WARNING, "ENGINECORE", "WARN: No UStruct objects found");
 	}
@@ -1025,15 +1070,10 @@ void EngineCore::generatePackages(int64_t & finishedPackages, int64_t & totalPac
 		windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_WARNING, "ENGINECORE", "WARN: No Enum objects found");
 	}
 
-	MessageBoxA(0, std::to_string(numUStructsFound).c_str(), "numUStructsFound", MB_OK);
-	MessageBoxA(0, std::to_string(numUStructsFound).c_str(), "numEnumsFound", MB_OK);
-
 	//reset the counter to 0 as we are using it again but this time really for packages
 	finishedPackages = 0;
 	totalPackages = upackages.size();
 	windows::LogWindow::Log(windows::LogWindow::logLevels::LOGLEVEL_INFO, "ENGINECORE", "Total packages: %d", totalPackages);
-
-
 
 	EngineStructs::Package basicType;
 	basicType.index = 0;
@@ -1084,6 +1124,8 @@ void EngineCore::generatePackages(int64_t & finishedPackages, int64_t & totalPac
 				auto& dataVector = isClass ? ePackage.classes : ePackage.structs;
 				const auto naming = isClass ? "Class" : "Struct";
 
+				if(object->getName() == "Vector")
+					Beep(750, 300);
 
 
 				//is the struct predefined?

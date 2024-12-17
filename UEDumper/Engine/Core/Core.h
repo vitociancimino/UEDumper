@@ -135,7 +135,7 @@ public:
 	//Dump generation
 
 	static void cacheFNames(int64_t& finishedNames, int64_t& totalNames, CopyStatus& status);
-
+	static void dumpChunkedGnames(uintptr_t gnames, bool dectypt = false);
 	/// package generation
 
 	/**

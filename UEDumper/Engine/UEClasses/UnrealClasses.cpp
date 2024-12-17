@@ -21,9 +21,14 @@ UClass* UObject::getClass() const
 	UREADORNULL(UClass, ClassPrivate)
 }
 
-std::string UObject::getName() const
+std::string UObject::getName(bool uProperty) const
 {
-	return EngineCore::FNameToString(NamePrivate);
+	if (uProperty)
+		return EngineCore::FNameToString((FName)NamePrivate.Number);
+	else
+		return EngineCore::FNameToString(NamePrivate);
+
+
 }
 
 std::string UObject::getName(const FName& fName)
@@ -44,6 +49,9 @@ std::string UObject::getFullName() const
 	}
 
 	std::string fullname = temp + name;
+
+	printf("fullname: %s\n", fullname.c_str());
+
 	return fullname;
 }
 
@@ -220,7 +228,13 @@ UClass* AActor::staticClass()
 
 UField* UField::getNext() const
 {
+#if defined DFHO
+	UREADORNULL(UField, OuterPrivate) //OuterPrivate is the same as Next solo in u field
+#else
 	UREADORNULL(UField, Next)
+#endif
+
+
 }
 
 UClass* UField::staticClass()
@@ -266,7 +280,8 @@ UClass* UStruct::staticClass()
 	//please can someone explain why the fuck they decided to write struct in lowercase
 	return ObjectsManager::findObject<UClass>("/Script/CoreUObject.struct", true);
 #else
-	return ObjectsManager::findObject<UClass>("/Script/CoreUObject.Struct", true);
+	auto result = ObjectsManager::findObject<UClass>("/Script/CoreUObject.Struct", true);
+	return result;
 #endif
 }
 
