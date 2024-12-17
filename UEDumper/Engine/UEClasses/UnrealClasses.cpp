@@ -228,11 +228,11 @@ UClass* AActor::staticClass()
 
 UField* UField::getNext() const
 {
-#if defined DFHO
-	UREADORNULL(UField, OuterPrivate) //OuterPrivate is the same as Next solo in u field
-#else
 	UREADORNULL(UField, Next)
-#endif
+//#if defined DFHO
+//	UREADORNULL(UField, OuterPrivate) //OuterPrivate is the same as Next solo in u field
+//#else
+//#endif
 
 
 }

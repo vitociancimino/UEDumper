@@ -337,7 +337,7 @@ bool EngineCore::generateStructOrClass(UStruct* object, std::vector<EngineStruct
 			EngineStructs::Member member;
 			member.size = prop->ElementSize * prop->ArrayDim;
 			member.arrayDim = prop->ArrayDim;
-			member.name = generateValidVarName(prop->getName(true));
+			member.name = generateValidVarName(prop->getName());
 			//should not happen
 			if (member.size == 0)
 			{

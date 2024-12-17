@@ -128,7 +128,7 @@ public:
 	using UObject::UObject;
 
 	/** Next Field in the linked list */
-	UField* Next;
+	UField* Next;  // 0x0030 (0x0008)
 
 	UField* getNext() const;
 
@@ -193,128 +193,21 @@ class UStruct : public UField
 public:
 	using UField::UField;
 
-	unsigned char UnknownData00_3[0x10];	// 0x0038 (0x0010)
-	int32_t		PropertiesSize;				// 0x0048 (0x0004)
-	unsigned char UnknownData00_4[0x4];		// 0x004C (0x0004)
-
-#if UE_VERSION < UE_5_03
-	UStruct* SuperStruct;					 // 0x0050 (0x0008)
-	int32_t		MinAlignment;				 // 0x0058 (0x0004)
-
-	unsigned char UnknownData00_5[0x24];    
-
-	UField* Children;						 // 0x0080 (0x0008)
-#else
-	//commented out because its the same (most of the cases)
-	//TNonAccessTrackedObjectPtr<UStruct> SuperStruct;
+	unsigned char                                      UnknownData00_3[0x18];
 	UStruct* SuperStruct;
-
-	//TObjectPtr<UField> Children;
+	unsigned char                                      UnknownData01_6[0x8];
 	UField* Children;
-#endif
+	unsigned char                                      UnknownData02_7[0x58];
+	
+	int32_t		PropertiesSize;
+	int32_t		MinAlignment;
+	TArray<uint8_t> Script;
+	UProperty* PropertyLink;
+	UProperty* RefLink;
+	UProperty* DestructorLink;
+	UProperty* PostConstructLink;
+	TArray<UObject*> ScriptObjectReferences;
 
-#if UE_VERSION >= UE_4_25
-	/** Pointer to start of linked list of child fields */
-	FField* ChildProperties;
-#endif
-
-
-	///** Script byte code associated with this object */
-	//TArray<uint8_t> Script;
-
-#if UE_VERSION < UE_4_25
-	/** In memory only: Linked list of properties from most-derived to base */
-	//UProperty* PropertyLink;
-
-	///** In memory only: Linked list of object reference properties from most-derived to base */
-	//UProperty* RefLink;
-
-	///** In memory only: Linked list of properties requiring destruction. Note this does not include things that will be destroyed byt he native destructor */
-	//UProperty* DestructorLink;
-
-	///** In memory only: Linked list of properties requiring post constructor initialization */
-	//UProperty* PostConstructLink;
-
-
-	///** Array of object references embedded in script code. Mirrored for easy access by realtime garbage collection code */
-	//TArray<UObject*> ScriptObjectReferences;
-
-
-
-#else
-
-	// https://github.com/EpicGames/UnrealEngine/blob/4.25/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L312
-	// https://github.com/EpicGames/UnrealEngine/blob/4.26/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L321
-	// https://github.com/EpicGames/UnrealEngine/blob/4.27/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L321
-
-	/** In memory only: Linked list of properties from most-derived to base */
-	FProperty* PropertyLink;
-
-	/** In memory only: Linked list of object reference properties from most-derived to base */
-	FProperty* RefLink;
-
-	/** In memory only: Linked list of properties requiring destruction. Note this does not include things that will be destroyed byt he native destructor */
-	FProperty* DestructorLink;
-
-	/** In memory only: Linked list of properties requiring post constructor initialization */
-	FProperty* PostConstructLink;
-
-#if UE_VERSION < UE_5_03
-	/** Array of object references embedded in script code and referenced by FProperties. Mirrored for easy access by realtime garbage collection code */
-	TArray<UObject*> ScriptAndPropertyObjectReferences;
-#else
-
-	/** Array of object references embedded in script code and referenced by FProperties. Mirrored for easy access by realtime garbage collection code */
-	TArray<TObjectPtr<UObject>> ScriptAndPropertyObjectReferences;
-
-
-#endif
-	//things are defined easier because theres no reason implementing all classes
-
-	//typedef TArray<TPair<TFieldPath<FField>, int32>> FUnresolvedScriptPropertiesArray
-	//FUnresolvedScriptPropertiesArray* UnresolvedScriptProperties;
-	/** Contains a list of script properties that could not be resolved at load time */
-	uintptr_t UnresolvedScriptProperties;
-
-#if WITH_EDITORONLY_DATA
-	/** List of wrapper UObjects for FProperties */
-	TArray<uintptr_t> PropertyWrappers;
-
-	/** Unique id incremented each time this class properties get destroyed */
-	int32_t FieldPathSerialNumber;
-
-#endif
-
-#if UE_VERSION < UE_5_00
-
-	// https://github.com/EpicGames/UnrealEngine/blob/4.25/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L335
-	// https://github.com/EpicGames/UnrealEngine/blob/4.26/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L344
-	// https://github.com/EpicGames/UnrealEngine/blob/4.27/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L344
-	/** Cached schema for optimized unversioned property serialization, owned by this. */
-	uintptr_t UnversionedSchema = 0;
-#else
-
-	// https://github.com/EpicGames/UnrealEngine/blob/5.0/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L353
-	// https://github.com/EpicGames/UnrealEngine/blob/5.1/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L413
-	/** Cached schema for optimized unversioned and filtereditoronly property serialization, owned by this. */
-	uintptr_t UnversionedGameSchema = 0;
-
-#if WITH_EDITORONLY_DATA
-
-	/** Cached schema for optimized unversioned property serialization, with editor data, owned by this. */
-	uintptr_t UnversionedEditorSchema = 0;
-
-#if UE_VERSION > UE_5_00
-	// https://github.com/EpicGames/UnrealEngine/blob/5.1/Engine/Source/Runtime/CoreUObject/Public/UObject/Class.h#L423
-	bool bHasAssetRegistrySearchableProperties;
-#endif
-
-
-#endif
-
-#endif
-
-#endif
 
 	template <typename T>
 	T* getSuper();
@@ -328,12 +221,6 @@ public:
 
 	UField* getChildren() const;
 
-#if UE_VERSION >= UE_4_25
-	FProperty* getChildProperties() const;
-#endif
-
-
-	//static std::string typeName() { return "UStruct"; }
 	static UClass* staticClass();
 };
 
@@ -422,15 +309,16 @@ public:
 	using UField::UField;
 
 	// Persistent variables.
-	//char pad[4]; // 0x0038 (0x0004)
+	char pad[4];				// 0x0038 (0x0004)
 
-	int32_t		ArrayDim;    // 0x003C (0x0004)
-	int32_t		ElementSize;  // 0x0040 (0x0004)
-	uint64_t	PropertyFlags; // 0x0048 (0x0008)
-	uint16_t	RepIndex; 
+	int32_t		ArrayDim;		// 0x003C (0x0004)
+	int32_t		ElementSize;	// 0x0040 (0x0004)
+	char pad2[4];				// 0x0044 (0x0004)
+	uint64_t	PropertyFlags;	// 0x0048 (0x0008)
+	uint16_t	RepIndex; 	    // 0x0050 (0x0002)
 
-	uint8_t		BlueprintReplicationCondition; 
-	int32_t		Offset; 
+	uint8_t		BlueprintReplicationCondition;  // 0x0052 (0x0001)
+	int32_t		Offset; // 0x0054 (0x0004)
 
 	FName		RepNotifyFunc; 
 
@@ -446,7 +334,7 @@ public:
 	/** In memory only: Linked list of properties requiring post constructor initialization.**/
 	UProperty* PostConstructLinkNext;
 
-	//static std::string typeName() { return "UProperty"; }
+	static std::string typeName() { return "UProperty"; }
 	static UClass* staticClass();
 
 	int32_t getOffset() const;
